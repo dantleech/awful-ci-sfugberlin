@@ -1,4 +1,7 @@
-PocketCi
-====================
+Awful CI
+========
 
-[![Build Status](https://travis-ci.org/dantleech/pocket-ci.svg?branch=master)](https://travis-ci.org/dantleech/pocket-ci)
+Demo for SF UG Berlin 2019-03-27
+
+This script uses Amphp to "continuously integrate" several github repositories.
+

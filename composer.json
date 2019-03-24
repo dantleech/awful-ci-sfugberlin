@@ -2,7 +2,6 @@
     "name": "dantleech/pocket-ci",
     "description": "Pocket CI",
     "license": "MIT",
-    "type": "phpactor-extension",
     "authors": [
         {
             "name": "Daniel Leech",
@@ -11,7 +10,9 @@
     ],
 
     "require": {
-        "phpactor/container": "^1.0"
+        "amphp/amp": "^2.1",
+        "amphp/process": "^1.1",
+        "phpactor/test-utils": "^1.0"
     },
     "require-dev": {
         "phpstan/phpstan": "^0.11.4",
@@ -29,7 +30,6 @@
         }
     },
     "extra": {
-        "phpactor.extension_class": "Phpactor\\Extension\\PocketCi\\PocketCiExtension",
         "branch-alias": {
             "dev-master": "0.1.x-dev"
         }
