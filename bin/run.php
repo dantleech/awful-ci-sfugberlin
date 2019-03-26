@@ -22,14 +22,10 @@ Loop::run(function () {
 
     $promises = [];
     foreach ($repos as $repo) {
-        $promises[] = Amp\call(function () use ($repo, $builder) {
-
-            return yield from $builder->build($repo);
-
-        });
+        $promises[] = $builder->build($repo);
     }
 
-    $exitCodes = yield Amp\Promise\all($promises);
+    $exitCodes = yield $promises;
 
     foreach ($repos as $index => $repo) {
         echo PHP_EOL . $repo . ' has exit code  ' .$exitCodes[$index] . PHP_EOL . PHP_EOL;
@@ -49,16 +45,18 @@ class Builder
         $this->workspace = $workspace;
     }
 
-    public function build(string $repo): Generator
+    public function build(string $repo): Promise
     {
-        $subPath = substr($repo, strrpos($repo, '/') + 1);
+        return Amp\call(function() use ($repo) {
+            $subPath = substr($repo, strrpos($repo, '/') + 1);
 
-        $exitCode = 0;
-        $exitCode =+ yield from $this->execute(sprintf('git clone %s', $repo));
-        $exitCode =+ yield from $this->execute(sprintf('composer install', $repo), $subPath);
-        $exitCode =+ yield from $this->execute(sprintf('./vendor/bin/phpstan analyse --level=1 lib/', $repo), $subPath);
+            $exitCode = 0;
+            $exitCode =+ yield from $this->execute(sprintf('git clone %s', $repo));
+            $exitCode =+ yield from $this->execute(sprintf('composer install', $repo), $subPath);
+            $exitCode =+ yield from $this->execute(sprintf('./vendor/bin/phpstan analyse --level=1 lib/', $repo), $subPath);
 
-        return $exitCode;
+            return $exitCode;
+        });
     }
 
     private function execute(string $command, string $subPath = '/'): Generator
@@ -69,7 +67,7 @@ class Builder
         
         $out = $process->getStderr();
         
-        while ($buffer = yield $out->read()) {
+        while (null !== $buffer = yield $out->read()) {
             echo $buffer;
         }
         
