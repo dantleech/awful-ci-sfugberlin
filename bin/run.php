@@ -1,46 +1,41 @@
 <?php
 
-use Amp\Coroutine;
 use Amp\Loop;
 use Amp\Process\Process;
+use Amp\Promise;
 use Phpactor\TestUtils\Workspace;
-use Symfony\Component\Console\Output\StreamOutput;
-use Symfony\Component\Console\Tests\Helper\ProcessHelperTest;
-
 
 require __DIR__ . '/../vendor/autoload.php';
 
-$repos = [
-    'git@github.com:phpactor/worse-reflection',
-    'git@github.com:phpactor/completion',
-    'git@github.com:dantleech/fink',
-    'git@github.com:phpactor/worse-reflection-extension',
-    'git@github.com:phpactor/config-loader',
-    'git@github.com:phpactor/class-to-file',
-    'git@github.com:phpactor/class-to-file-extension',
-];
+Loop::run(function () {
 
-Loop::run(function () use ($repos) {
     $workspace = Workspace::create(__DIR__ . '/../Workspace');
     $workspace->reset();
+
+    $repos = [
+        'git@github.com:dantleech/fink',
+        'git@github.com:phpbench/phpbench',
+        'git@github.com:phpactor/config-loader',
+    ];
 
     $builder = new Builder($workspace);
 
     $promises = [];
-    foreach ($repos as $url) {
-        $promises[] = Amp\call(function () use ($url, $builder) {
-            return yield from $builder->build($url);
+    foreach ($repos as $repo) {
+        $promises[] = Amp\call(function () use ($repo, $builder) {
+
+            return yield from $builder->build($repo);
+
         });
     }
 
-    $results = yield Amp\Promise\all($promises);
+    $exitCodes = yield Amp\Promise\all($promises);
 
-    echo PHP_EOL . PHP_EOL . PHP_EOL . 'THE RESULTS ARE IN!!!' . PHP_EOL . PHP_EOL;
-
-    foreach ($repos as $index => $url) {
-        echo $url . ' exited with ' . $results[$index] . PHP_EOL;
+    foreach ($repos as $index => $repo) {
+        echo PHP_EOL . $repo . ' has exit code  ' .$exitCodes[$index] . PHP_EOL . PHP_EOL;
     }
 });
+
 
 class Builder
 {
@@ -49,43 +44,36 @@ class Builder
      */
     private $workspace;
 
-    public function __construct(Workspace $workspace) 
+    public function __construct(Workspace $workspace)
     {
         $this->workspace = $workspace;
     }
 
-    public function build(string $url): Generator
+    public function build(string $repo): Generator
     {
-        $destination = substr($url, strpos($url, '/') + 1);
+        $subPath = substr($repo, strrpos($repo, '/') + 1);
 
-        $status = 0;
-        $status += yield from $this->runCommand(sprintf('git clone %s %s', $url, $destination));
-        $status += yield from $this->runCommand(sprintf('composer install --quiet'), $destination);
-        $status += yield from $this->runCommand(sprintf('./vendor/bin/phpunit'), $destination);
-        $status += yield from $this->runCommand(sprintf('./vendor/bin/phpstan analyse --level=1 lib'), $destination);
+        $exitCode = 0;
+        $exitCode =+ yield from $this->execute(sprintf('git clone %s', $repo));
+        $exitCode =+ yield from $this->execute(sprintf('composer install', $repo), $subPath);
+        $exitCode =+ yield from $this->execute(sprintf('./vendor/bin/phpstan analyse --level=1 lib/', $repo), $subPath);
 
-        if ($status === 0) {
-            return $status;
-        }
-
-        return $status;
+        return $exitCode;
     }
 
-    private function runCommand(string $command, $path = '/'): Generator
+    private function execute(string $command, string $subPath = '/'): Generator
     {
-        echo '>> ' . $path . ': Running ' . $command . PHP_EOL;
-        $process = new Process($command, $this->workspace->path($path));
+        echo $command . PHP_EOL;
+        $process = new Process($command, $this->workspace->path($subPath));
+        $pid = yield $process->start();
         
-        $result = yield $process->start();
-        $err = $process->getStderr();
-        $std = $process->getStdout();
-
-        foreach ([$err, $std] as $output) {
-            while ($buffer = yield $output->read()) {
-                echo $buffer;
-            }
+        $out = $process->getStderr();
+        
+        while ($buffer = yield $out->read()) {
+            echo $buffer;
         }
-
+        
         return yield $process->join();
     }
 }
+
