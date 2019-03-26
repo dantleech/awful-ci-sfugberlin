@@ -69,7 +69,7 @@ class Builder
         
         $out = $process->getStderr();
         
-        while ($buffer = yield $out->read()) {
+        while (null !== $buffer = yield $out->read()) {
             echo $buffer;
         }
         
