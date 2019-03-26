@@ -5,18 +5,19 @@ use Amp\Process\Process;
 use Amp\Promise;
 use Phpactor\TestUtils\Workspace;
 
+
 require __DIR__ . '/../vendor/autoload.php';
 
+
 Loop::run(function () {
-
-    $workspace = Workspace::create(__DIR__ . '/../Workspace');
-    $workspace->reset();
-
     $repos = [
         'git@github.com:dantleech/fink',
         'git@github.com:phpbench/phpbench',
         'git@github.com:phpactor/config-loader',
     ];
+
+    $workspace = Workspace::create(__DIR__ . '/../Workspace');
+    $workspace->reset();
 
     $builder = new Builder($workspace);
 
@@ -27,11 +28,13 @@ Loop::run(function () {
 
     $exitCodes = yield $promises;
 
+    echo "\n\n";
     foreach ($repos as $index => $repo) {
-        echo PHP_EOL . $repo . ' has exit code  ' .$exitCodes[$index] . PHP_EOL . PHP_EOL;
+        echo 'Repository ' . $repo . ' exited with ' . $exitCodes[$index] . PHP_EOL;
     }
-});
 
+    exit(array_sum($exitCodes));
+});
 
 class Builder
 {
@@ -47,31 +50,33 @@ class Builder
 
     public function build(string $repo): Promise
     {
-        return Amp\call(function() use ($repo) {
+        return Amp\call(function () use ($repo) {
             $subPath = substr($repo, strrpos($repo, '/') + 1);
 
             $exitCode = 0;
-            $exitCode =+ yield from $this->execute(sprintf('git clone %s', $repo));
-            $exitCode =+ yield from $this->execute(sprintf('composer install', $repo), $subPath);
-            $exitCode =+ yield from $this->execute(sprintf('./vendor/bin/phpstan analyse --level=1 lib/', $repo), $subPath);
+            $exitCode += yield from $this->executeCommand(sprintf('git clone %s', $repo));
+            $exitCode += yield from $this->executeCommand('composer install', $subPath);
+            $exitCode += yield from $this->executeCommand('./vendor/bin/phpstan analyse --level=1 lib', $subPath);
 
             return $exitCode;
+
         });
     }
 
-    private function execute(string $command, string $subPath = '/'): Generator
+    private function executeCommand(string $command, string $path = '/'): Generator
     {
-        echo $command . PHP_EOL;
-        $process = new Process($command, $this->workspace->path($subPath));
+        $process = new Process($command, $this->workspace->path($path));
         $pid = yield $process->start();
-        
+
         $out = $process->getStderr();
-        
+
         while (null !== $buffer = yield $out->read()) {
             echo $buffer;
         }
-        
-        return yield $process->join();
+
+        $exitCode = yield $process->join();
+
+        return $exitCode;
     }
 }
 
